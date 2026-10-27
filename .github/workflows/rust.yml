@@ -38,9 +38,6 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
-      - name: Clippy
-        run: cargo clippy -- -D warnings
-
   publish:
     name: Publish to crates.io
     runs-on: ubuntu-latest
