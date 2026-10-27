@@ -47,22 +47,31 @@ pub struct ProcInfo {
 
 pub struct Collector {
     sys: System,
+    slow_tick: u32,
 }
 
 impl Collector {
     pub fn new() -> Self {
         let mut sys = System::new_all();
         sys.refresh_all();
-        Self { sys }
+        Self { sys, slow_tick: 0 }
     }
 
     #[allow(clippy::field_reassign_with_default)]
     pub fn collect_fast(&mut self) -> SystemStats {
-        self.sys.refresh_all();
-        self.sys.refresh_disks_list();
-        self.sys.refresh_disks();
-        self.sys.refresh_networks_list();
-        self.sys.refresh_networks();
+        self.sys.refresh_cpu();
+        self.sys.refresh_memory();
+        self.sys.refresh_processes();
+
+        self.slow_tick += 1;
+        if self.slow_tick >= 60 {
+            self.sys.refresh_disks_list();
+            self.sys.refresh_networks_list();
+            self.slow_tick = 0;
+        } else {
+            self.sys.refresh_disks();
+            self.sys.refresh_networks();
+        }
 
         let mut s = SystemStats::default();
 
@@ -121,15 +130,24 @@ impl Collector {
         }
 
         // ── Processes ─────────────────────────────────────────────────────────
-        let mut procs: Vec<ProcInfo> = self
-            .sys
-            .processes()
-            .iter()
+
+        let mut procs: Vec<_> = self.sys.processes().iter().collect();
+        let _n = procs.len().min(10);
+        if procs.len() > 10 {
+            procs.select_nth_unstable_by(9, |a, b| {
+                b.1.cpu_usage().partial_cmp(&a.1.cpu_usage()).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            procs.truncate(10);
+        }
+        procs.sort_by(|a, b| b.1.cpu_usage().partial_cmp(&a.1.cpu_usage()).unwrap_or(std::cmp::Ordering::Equal));
+
+
+        let mut procs: Vec<ProcInfo> = procs.into_iter()
             .map(|(pid, p)| ProcInfo {
-                pid: pid.as_u32(), // requires PidExt in scope
-                name: p.name().to_string(),
+                pid: pid.as_u32(),
+                name: p.name().to_string(), // now only 10 allocations, not n
                 cpu: p.cpu_usage(),
-                mem_mb: p.memory() / 1024, // KB → MB
+                mem_mb: p.memory() / 1024 / 1024,
             })
             .collect();
 

@@ -130,12 +130,11 @@ fn handle_mouse(state: &mut AppState, m: MouseEvent) -> Action {
             }
 
             // check process row click (select row)
-            if let (Some(area), Some(header_y)) = (state.proc_area, state.proc_header_y)
-                && in_rect(col, row, area)
-                && row > header_y
-            {
-                let idx = (row - header_y - 1) as usize;
-                state.selected_row = Some(idx);
+            if let (Some(area), Some(header_y)) = (state.proc_area, state.proc_header_y) {
+                if in_rect(col, row, area) && row > header_y {
+                    let idx = (row - header_y - 1) as usize;
+                    state.selected_row = Some(idx);
+                }
             }
             Action::None
         }
@@ -553,7 +552,7 @@ fn draw_processes(
                         Modifier::empty()
                     }),
                 ),
-                Cell::from(format!("{} GB", p.mem_mb)).style(base_style),
+                Cell::from(format_mem(p.mem_mb)).style(base_style),
             ])
         })
         .collect();
@@ -937,4 +936,12 @@ fn wall_time() -> String {
         (secs % 3600) / 60,
         secs % 60
     )
+}
+
+fn format_mem(mem_mb: u64) -> String {
+    if mem_mb < 1000 {
+        format!("{} MB", mem_mb)
+    } else {
+        format!("{:.2} GB", mem_mb as f64 / 1024.0)
+    }
 }
